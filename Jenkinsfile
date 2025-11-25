@@ -57,6 +57,7 @@ pipeline {
 
                     echo "Applying nginx-test.yaml…"
                     kubectl apply -f nginx-test.yaml
+                    kubectl apply -f nginx-service.yaml
 
                     echo "Checking pods…"
                     kubectl get pods -o wide
