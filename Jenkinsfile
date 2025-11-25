@@ -2,28 +2,34 @@ pipeline {
     agent { label 'jenkins-aks' }
 
     environment {
-        AZURE_SUBSCRIPTION = "aks1-sc"
-        RESOURCE_GROUP     = "poc"
-        AKS_CLUSTER        = "aks1"
+        ARM_CLIENT_ID        = credentials('ARM_CLIENT_ID')
+        ARM_CLIENT_SECRET    = credentials('ARM_CLIENT_SECRET')
+        ARM_TENANT_ID        = credentials('ARM_TENANT_ID')
+        ARM_SUBSCRIPTION_ID  = credentials('ARM_SUBSCRIPTION_ID')
+
+        RESOURCE_GROUP = "jenkins-poc"
+        AKS_CLUSTER    = "jenkins"
     }
 
     stages {
+
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
 
-        stage('Login to Azure') {
+        stage('Azure Login') {
             steps {
                 sh '''
-                    echo "Logging into Azure…"
+                    echo "Logging into Azure using Service Principal…"
                     az login --service-principal \
-                        -u $AZURE_CLIENT_ID \
-                        -p $AZURE_CLIENT_SECRET \
-                        --tenant $AZURE_TENANT_ID
-                    
-                    az account set --subscription "$AZURE_SUBSCRIPTION"
+                        -u "$ARM_CLIENT_ID" \
+                        -p "$ARM_CLIENT_SECRET" \
+                        --tenant "$ARM_TENANT_ID"
+
+                    echo "Setting subscription…"
+                    az account set --subscription "$ARM_SUBSCRIPTION_ID"
                 '''
             }
         }
@@ -31,25 +37,28 @@ pipeline {
         stage('Get AKS Credentials') {
             steps {
                 sh '''
-                    echo "Fetching AKS kubeconfig…"
-                    az aks get-credentials -n "$AKS_CLUSTER" -g "$RESOURCE_GROUP" --overwrite-existing
+                    echo "Getting kubeconfig for AKS…"
+                    az aks get-credentials \
+                        -n "$AKS_CLUSTER" \
+                        -g "$RESOURCE_GROUP" \
+                        --overwrite-existing
 
-                    echo "Converting kubeconfig using kubelogin..."
+                    echo "Converting kubeconfig using kubelogin (Azure CLI mode)…"
                     kubelogin convert-kubeconfig -l azurecli
                 '''
             }
         }
 
-        stage('Deploy to AKS') {
+        stage('Deploy Nginx App') {
             steps {
                 sh '''
-                    echo "Testing AKS access…"
+                    echo "Checking cluster access…"
                     kubectl get nodes
 
-                    echo "Applying nginx manifest…"
+                    echo "Applying nginx-test.yaml…"
                     kubectl apply -f nginx-test.yaml
 
-                    echo "Checking deployed pods…"
+                    echo "Checking pods…"
                     kubectl get pods -o wide
                 '''
             }
